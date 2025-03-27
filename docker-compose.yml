@@ -1,11 +1,12 @@
 services:
   mysql:
-    image: mariadb:11.4
+    image: mysql:lts
     logging:
       driver: none
     command: ["--max-allowed-packet=512M"]
     volumes:
       - "./data/db:/var/lib/mysql:delegated"
+      - "./mysql/conf.d/my.cnf:/etc/mysql/conf.d/my.cnf"
     ports:
        - "127.0.0.1:3306:3306"
     environment:
