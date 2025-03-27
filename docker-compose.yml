@@ -1,6 +1,8 @@
 services:
   mysql:
-    image: mysql:lts
+    build:
+      context: ./custom/mysql
+    image: mysql-custom
     logging:
       driver: none
     command: ["--max-allowed-packet=512M"]

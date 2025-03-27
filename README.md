@@ -33,13 +33,45 @@ The docker image installs the following packages on your system:
 | :-------------: | :-------------: |
 |Linux|Ubuntu 24.04|
 |OpenLiteSpeed|[Latest version](https://hub.docker.com/r/litespeedtech/openlitespeed)|
-|MariaDB|[Stable version: 11.4](https://hub.docker.com/_/mariadb)|
+|MySQL|[LTS version](https://hub.docker.com/_/mysql)|
 |PHP|[Latest version](http://rpms.litespeedtech.com/debian/)|
 |LiteSpeed Cache|[Latest from WordPress.org](https://wordpress.org/plugins/litespeed-cache/)|
 |ACME|[Latest from ACME official](https://github.com/acmesh-official/get.acme.sh)|
 |WordPress|[Latest from WordPress](https://wordpress.org/download/)|
 |phpMyAdmin|[Latest from dockerhub](https://hub.docker.com/r/bitnami/phpmyadmin/)|
 |Redis|[Latest from dockerhub](https://hub.docker.com/_/redis/)|
+
+## MySQL Database
+### Default Configuration
+- Database Type: MySQL LTS
+- Root Password: Defined in `.env` file (MYSQL_ROOT_PASSWORD)
+- Data Storage: `/var/lib/mysql` (persistent volume)
+- Default Charset: utf8mb4
+- Default Collation: utf8mb4_unicode_ci
+
+### Database Operations
+#### Creating a Database
+```bash
+bash bin/database.sh -D example.com
+```
+
+#### Accessing Database
+- phpMyAdmin: http://127.0.0.1:8080 (root/.env password)
+- Command line:
+```bash
+docker compose exec mysql mysql -uroot -p
+```
+
+### Backup & Recovery
+#### Backup Database
+```bash
+docker compose exec mysql mysqldump -uroot -p${MYSQL_ROOT_PASSWORD} --all-databases > backup.sql
+```
+
+#### Restore Database
+```bash
+docker compose exec -T mysql mysql -uroot -p${MYSQL_ROOT_PASSWORD} < backup.sql
+```
 
 ## Data Structure
 Cloned project 
