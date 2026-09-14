@@ -137,7 +137,7 @@ install_wp_plugin(){
         wget -q -P ${VH_DOC_ROOT}/wp-content/plugins/ https://downloads.wordpress.org/plugin/${PLUGIN}
         if [ ${?} = 0 ]; then
 		    ck_unzip
-            unzip -qq -o ${VH_DOC_ROOT}/wp-content/plugins/${PLUGIN} -d ${VH_DOC_ROOT}/wp-content/plugins/
+            /usr/bin/unzip -qq -o ${VH_DOC_ROOT}/wp-content/plugins/${PLUGIN} -d ${VH_DOC_ROOT}/wp-content/plugins/
         else
             echo "${PLUGINLIST} FAILED to download"
         fi
@@ -236,9 +236,19 @@ preinstall_wordpress(){
 
 app_wordpress_dl(){
 	if [ ! -f "${VH_DOC_ROOT}/wp-config.php" ] && [ ! -f "${VH_DOC_ROOT}/wp-config-sample.php" ]; then
-		wp core download \
-			--allow-root \
-			--quiet
+	    ck_unzip
+		### WP CLI truncates file paths over 100 chars, wait new release, use download for now. 
+		#wp core download \
+	    #   --allow-root \
+        #   --quiet
+        curl -fsSL https://wordpress.org/latest.zip -o "${VH_DOC_ROOT}/wordpress.zip" &&
+        /usr/bin/unzip -q "${VH_DOC_ROOT}/wordpress.zip" -d "${VH_DOC_ROOT}" &&
+        mv "${VH_DOC_ROOT}/wordpress/"* "${VH_DOC_ROOT}/" &&
+        rmdir "${VH_DOC_ROOT}/wordpress" &&
+        rm -f "${VH_DOC_ROOT}/wordpress.zip" || {
+            echo 'Failed to download or extract WordPress'
+            return 1
+        }    			
 	else
 	    echo 'wordpress already exist, abort!'
 		exit 1
