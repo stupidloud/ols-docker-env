@@ -111,7 +111,7 @@ EOT
 }
 
 check_db_access(){
-    docker compose exec -T mysql su -c "mysql -uroot --password=${MYSQL_ROOT_PASSWORD} -e 'status'" >/dev/null 2>&1
+    docker compose exec -T mysql sh -c "mysql -uroot --password=${MYSQL_ROOT_PASSWORD} -e 'status'" >/dev/null 2>&1
     if [ ${?} != 0 ]; then
         echo '[X] DB access failed, please check!'
         exit 1
@@ -119,7 +119,7 @@ check_db_access(){
 }
 
 check_db_exist(){
-    docker compose exec -T mysql su -c "test -e /var/lib/mysql/${1}"
+    docker compose exec -T mysql sh -c "test -e /var/lib/mysql/${1}"
     if [ ${?} = 0 ]; then
         echo "Database ${1} already exist, skip DB creation!"
         exit 0    
@@ -127,7 +127,7 @@ check_db_exist(){
 }
 
 check_db_not_exist(){
-    docker compose exec -T mysql su -c "test -e /var/lib/mysql/${1}"
+    docker compose exec -T mysql sh -c "test -e /var/lib/mysql/${1}"
     if [ ${?} != 0 ]; then
         echo "Database ${1} doesn't exist, skip DB deletion!"
         exit 0
@@ -135,7 +135,7 @@ check_db_not_exist(){
 }
 
 db_setup(){  
-    docker compose exec -T mysql su -c 'mysql -uroot --password=${MYSQL_ROOT_PASSWORD} \
+    docker compose exec -T mysql sh -c 'mysql -uroot --password=${MYSQL_ROOT_PASSWORD} \
         -e "CREATE DATABASE IF NOT EXISTS '${SQL_DB}';" \
         -e "CREATE USER IF NOT EXISTS '${SQL_USER}'@'${ANY}' IDENTIFIED BY '${SQL_PASS}';" \
         -e "GRANT ALL PRIVILEGES ON '${SQL_DB}'.* TO '${SQL_USER}'@'${ANY}';" \
@@ -154,7 +154,7 @@ db_delete(){
     fi
     validate_identifier "${SQL_USER}"
     check_db_not_exist ${SQL_DB}
-    docker compose exec -T mysql su -c 'mysql -uroot --password=${MYSQL_ROOT_PASSWORD} \
+    docker compose exec -T mysql sh -c 'mysql -uroot --password=${MYSQL_ROOT_PASSWORD} \
         -e "DROP DATABASE IF EXISTS '${SQL_DB}';" \
         -e "DROP USER IF EXISTS '${SQL_USER}'@'${ANY}';" \
         -e "FLUSH PRIVILEGES;"'
