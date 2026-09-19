@@ -1,355 +1,286 @@
-# OpenLiteSpeed WordPress Docker Container
+# OpenLiteSpeed + MySQL WordPress Docker 环境
 
-![ols-docker-env](https://socialify.git.ci/litespeedtech/ols-docker-env/image?custom_language=Shell&description=1&font=Inter&forks=1&issues=1&language=1&logo=https%3A%2F%2Fwww.litespeedtech.com%2Fimages%2Flogos%2Flitespeed%2Flitespeed-logo-square.svg&name=1&owner=1&pattern=Plus&pulls=1&stargazers=1&theme=Auto)
+基于 [litespeedtech/ols-docker-env](https://github.com/litespeedtech/ols-docker-env) 的 fork，用 **MySQL（带 MeCab 全文分词）** 替换官方的 MariaDB，并预置了 APCu、PHP / MySQL 调优配置。`mysql` 分支会定期合并上游更新。
 
-[![Build Status](https://github.com/litespeedtech/ols-docker-env/workflows/docker-build/badge.svg)](https://github.com/litespeedtech/ols-docker-env/actions/)
-[![docker pulls](https://img.shields.io/docker/pulls/litespeedtech/openlitespeed?style=flat&color=blue)](https://hub.docker.com/r/litespeedtech/openlitespeed)
-[![LiteSpeed on Slack](https://img.shields.io/badge/slack-LiteSpeed-blue.svg?logo=slack)](https://litespeedtech.com/slack)
-[![Follow on Twitter](https://img.shields.io/twitter/follow/litespeedtech.svg?label=Follow&style=social)](https://twitter.com/litespeedtech)
+## 与官方主线的区别
 
-Install a lightweight WordPress container with OpenLiteSpeed Edge or Stable version based on Ubuntu 24.04 Linux.
+| 项目 | 官方主线 | 本分支（`mysql`） |
+| :--- | :--- | :--- |
+| 数据库 | `mariadb:11.8` | [`kl3x/mysql-mecab`](https://hub.docker.com/r/kl3x/mysql-mecab)（MySQL + MeCab 全文分词插件） |
+| 数据库配置 | 镜像默认 | 挂载 `custom/my.cnf`（InnoDB 缓冲池、全文索引最小词元等调优） |
+| 数据库端口 | 不对外暴露 | 绑定到宿主机 `127.0.0.1:3306`，方便本机工具直连 |
+| Web 镜像 | 直接拉取官方镜像 | 通过 `custom/Dockerfile` 在官方镜像基础上安装 `lsphpXX-apcu` |
+| PHP 配置 | 镜像默认 | 挂载 `custom/php.ini`（`memory_limit` / `apc.shm_size` = 256M） |
+| `bin/database.sh` | 使用 `mariadb` 客户端 | 使用 `mysql` 客户端；`CREATE USER` 与 `GRANT` 分开写（MySQL 8 不支持 `GRANT ... IDENTIFIED BY`） |
+| phpMyAdmin | `restart: always` | `restart: unless-stopped`，关闭容器日志 |
+| 时区 | `America/New_York` | `UTC` |
+| CI | 监听 `master` 分支 | 监听 `mysql` 分支，支持手动触发 |
 
-## Prerequisites
+## 前置条件
 
-1. [Install Docker](https://www.docker.com/)
-2. [Install Docker Compose](https://docs.docker.com/compose/)
+1. [安装 Docker](https://www.docker.com/)
+2. [安装 Docker Compose](https://docs.docker.com/compose/)（v2，命令为 `docker compose`）
 
-## Configuration
+## 配置
 
-Edit the `.env` file to update the demo site domain, default MySQL user, and password.
-Feel free to check [Docker hub Tag page](https://hub.docker.com/repository/docker/litespeedtech/openlitespeed/tags) if you want to update default openlitespeed and php versions.
+编辑 `.env`：
 
-## Installation
+| 变量 | 说明 |
+| :--- | :--- |
+| `TimeZone` | 容器时区，默认 `UTC` |
+| `OLS_VERSION` | OpenLiteSpeed 版本，可在 [Docker Hub Tags](https://hub.docker.com/r/litespeedtech/openlitespeed/tags) 查看 |
+| `PHP_VERSION` | lsphp 包名，如 `lsphp85` |
+| `PHP_TAG` | PHP 点分版本号，如 `8.5`。**必须与 `PHP_VERSION` 对应**，用于定位容器内 `php.ini` 挂载路径 `/usr/local/lsws/${PHP_VERSION}/etc/php/${PHP_TAG}/mods-available/` |
+| `PHPMYADMIN_VERSION` | phpMyAdmin 镜像版本 |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
+| `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | 初始化时创建的默认库和用户 |
+| `DOMAIN` | 演示站点域名，默认 `localhost` |
 
-Clone this repository or copy the files from this repository into a new folder:
-```
-git clone https://github.com/klever1988/ols-docker-env.git
-```
+修改 `custom/my.cnf` 前请留意 `innodb_buffer_pool_size`（默认 16G）和 `innodb_log_file_size`（默认 4G），按服务器内存调整。
 
-Open a terminal, `cd` to the folder in which `docker compose.yml` is saved, and run:
-
-```bash
-docker compose up
-```
-
-Note: If you wish to run a single web server container, please see the [usage method here](https://github.com/litespeedtech/ols-dockerfiles#usage).
-
-## Components
-
-The docker image installs the following packages on your system:
-
-|Component|Version|
-| :-------------: | :-------------: |
-|Linux|Ubuntu 24.04|
-|OpenLiteSpeed|[Latest version](https://hub.docker.com/r/litespeedtech/openlitespeed)|
-|MySQL|[LTS version](https://hub.docker.com/_/mysql)|
-|PHP|[Latest version](http://rpms.litespeedtech.com/debian/)|
-|LiteSpeed Cache|[Latest from WordPress.org](https://wordpress.org/plugins/litespeed-cache/)|
-|ACME|[Latest from ACME official](https://github.com/acmesh-official/get.acme.sh)|
-|WordPress|[Latest from WordPress](https://wordpress.org/download/)|
-|phpMyAdmin|[Latest from dockerhub](https://hub.docker.com/r/phpmyadmin/phpmyadmin/)|
-|Redis|[Latest from dockerhub](https://hub.docker.com/_/redis/)|
-
-## MySQL Database
-### Default Configuration
-- Database Type: MySQL LTS
-- Root Password: Defined in `.env` file (MYSQL_ROOT_PASSWORD)
-- Data Storage: `/var/lib/mysql` (persistent volume)
-- Default Charset: utf8mb4
-- Default Collation: utf8mb4_unicode_ci
-
-### Database Operations
-#### Creating a Database
-```bash
-bash bin/database.sh -D example.com
-```
-
-#### Accessing Database
-- phpMyAdmin: http://127.0.0.1:8080 (root/.env password)
-- Command line:
-```bash
-docker compose exec mysql mysql -uroot -p
-```
-
-### Backup & Recovery
-#### Backup Database
-```bash
-docker compose exec mysql mysqldump -uroot -p${MYSQL_ROOT_PASSWORD} --all-databases > backup.sql
-```
-
-#### Restore Database
-```bash
-docker compose exec -T mysql mysql -uroot -p${MYSQL_ROOT_PASSWORD} < backup.sql
-```
-
-## Data Structure
-
-Cloned project
+## 安装
 
 ```bash
-├── acme
-├── bin
-│   └── container
+git clone -b mysql https://github.com/stupidloud/ols-docker-env.git
+cd ols-docker-env
+docker compose up -d --build
+```
+
+首次启动需要 `--build` 以构建带 APCu 的 Web 镜像；之后修改 `custom/Dockerfile` 或升级 `OLS_VERSION` / `PHP_VERSION` 时也需重新 `--build`。
+
+## 组件
+
+| 组件 | 版本 |
+| :---: | :---: |
+| Linux | Ubuntu 26.04 |
+| OpenLiteSpeed | [最新版](https://hub.docker.com/r/litespeedtech/openlitespeed) |
+| MySQL | [kl3x/mysql-mecab](https://hub.docker.com/r/kl3x/mysql-mecab) |
+| PHP | [最新版](http://rpms.litespeedtech.com/debian/) + APCu |
+| LiteSpeed Cache | [WordPress.org 最新版](https://wordpress.org/plugins/litespeed-cache/) |
+| ACME | [acme.sh 官方最新版](https://github.com/acmesh-official/get.acme.sh) |
+| WordPress | [官方最新版](https://wordpress.org/download/) |
+| phpMyAdmin | [Docker Hub](https://hub.docker.com/r/phpmyadmin/phpmyadmin/) |
+| Redis | [Docker Hub](https://hub.docker.com/_/redis/) |
+
+## 目录结构
+
+```
+├── acme                # Let's Encrypt 证书
+├── bin                 # 宿主机侧管理脚本
+│   └── container       # 挂载到容器内 /usr/local/bin 的脚本
+├── custom
+│   ├── Dockerfile      # 在官方镜像上安装 APCu
+│   ├── my.cnf          # MySQL 调优配置
+│   └── php.ini         # 追加的 PHP 配置（99-php.ini）
 ├── data
-│   └── db
-├── logs
-│   ├── access.log
-│   ├── error.log
-│   ├── lsrestart.log
-│   └── stderr.log
+│   └── db              # MySQL 数据目录
+├── logs                # Web 服务器及各虚拟主机日志
 ├── lsws
-│   ├── admin-conf
-│   └── conf
-├── sites
-│   └── localhost
-├── LICENSE
-├── README.md
+│   ├── admin-conf      # WebAdmin 配置
+│   └── conf            # OpenLiteSpeed 主配置
+├── redis               # Redis 数据与 redis.conf
+├── sites               # 站点根目录（WordPress 装在这里）
+├── .env
 └── docker-compose.yml
 ```
 
-* `acme` contains all applied certificates from Lets Encrypt
+## 使用
 
-* `bin` contains multiple CLI scripts to allow you add or delete virtual hosts, install applications, upgrade, etc
-
-* `data` stores the MySQL database
-
-* `logs` contains all of the web server logs and virtual host access logs
-
-* `lsws` contains all web server configuration files
-
-* `sites` contains the document roots (the WordPress application will install here)
-
-## Usage
-
-### Starting a Container
-
-Start the container with the `up` or `start` methods:
+### 启动 / 停止 / 删除容器
 
 ```bash
-docker compose up
+docker compose up -d        # 后台启动
+docker compose stop         # 停止
+docker compose down         # 停止并删除容器（数据卷保留在 ./data、./sites 等目录）
 ```
 
-You can run with daemon mode, like so:
+### 设置 WebAdmin 密码
 
-```bash
-docker compose up -d
-```
-
-The container is now built and running.
-
-### Stopping a Container
-
-```bash
-docker compose stop
-```
-
-### Removing Containers
-
-To stop and remove all containers, use the `down` command:
-
-```bash
-docker compose down
-```
-
-### Setting the WebAdmin Password
-
-We strongly recommend you set your personal password right away.
+强烈建议启动后立即设置：
 
 ```bash
 bash bin/webadmin.sh my_password
 ```
 
-### Starting a Demo Site
+WebAdmin 控制台地址：`https://<服务器IP>:7080`。
 
-After running the following command, you should be able to access the WordPress installation with the configured domain. By default the domain is <http://localhost>.
+### 启动演示站点
+
+执行后可通过 `.env` 中的 `DOMAIN`（默认 <http://localhost>）访问 WordPress 安装向导：
 
 ```bash
 bash bin/demosite.sh
 ```
 
-### Creating a Domain and Virtual Host
+### 添加 / 删除域名与虚拟主机
 
 ```bash
 bash bin/domain.sh [-A, --add] example.com
-```
-
-> Please ignore SSL certificate warnings from the server. They happen if you haven't applied the certificate.
->
-### Deleting a Domain and Virtual Host
-
-```bash
 bash bin/domain.sh [-D, --del] example.com
 ```
 
-### Creating a Database
+> 未申请证书前访问会出现 SSL 警告，忽略即可。
 
-You can either automatically generate the user, password, and database names, or specify them. Use the following to auto generate:
+### 创建数据库
+
+自动生成用户名、密码和库名：
 
 ```bash
 bash bin/database.sh [-D, --domain] example.com
 ```
 
-Use this command to specify your own names, substituting `user_name`, `my_password`, and `database_name` with your preferred values:
+或自行指定：
 
 ```bash
 bash bin/database.sh [-D, --domain] example.com [-U, --user] USER_NAME [-P, --password] MY_PASS [-DB, --database] DATABASE_NAME
 ```
 
-### Installing a WordPress Site
+用户名、库名只允许 `[A-Za-z0-9_]`，最长 63 字符；密码至少 8 位且不能包含 `' " \ $ \``。
 
-To preconfigure the `wp-config` file, run the `database.sh` script for your domain, before you use the following command to install WordPress:
+### 安装 WordPress
+
+先为域名执行上面的 `database.sh`（会预写 `wp-config.php`），再安装：
 
 ```bash
 bash bin/appinstall.sh [-A, --app] wordpress [-D, --domain] example.com
 ```
 
-### Connecting to Redis
+### 连接 Redis 对象缓存
 
-Go to [WordPress > LSCache Plugin > Cache > Object](https://docs.litespeedtech.com/lscache/lscwp/cache/#object-tab), select **Redis** method and input `redis` to the Host field.
+WordPress 后台 → LiteSpeed Cache → Cache → [Object](https://docs.litespeedtech.com/lscache/lscwp/cache/#object-tab)，方法选 **Redis**，Host 填 `redis`。
 
-### Install ACME
+### 直连 MySQL
 
-We need to run the ACME installation command the **first time only**.
-With email notification:
+MySQL 已绑定到宿主机 `127.0.0.1:3306`，可用本机客户端直接连接：
+
+```bash
+mysql -h 127.0.0.1 -P 3306 -uroot -p
+```
+
+### 使用 MeCab 全文分词
+
+`kl3x/mysql-mecab` 镜像已内置 MeCab 解析器插件，`custom/my.cnf` 中 `innodb_ft_min_token_size = 1` 允许索引单字词元。建表时指定解析器即可：
+
+```sql
+CREATE FULLTEXT INDEX ft_content ON wp_posts (post_content) WITH PARSER mecab;
+```
+
+### 安装 ACME（仅首次）
 
 ```bash
 bash bin/acme.sh [-I, --install] [-E, --email] EMAIL_ADDR
 ```
 
-### Applying a Let's Encrypt Certificate
+### 申请 Let's Encrypt 证书
 
-Use the root domain in this command, and it will check for a certificate and automatically apply one with and without `www`:
+传入根域名，脚本会同时为带 `www` 和不带 `www` 的域名申请：
 
 ```bash
 bash bin/acme.sh [-D, --domain] example.com
 ```
 
-Other parameters:
+其他参数：
 
-* [`-r`, `--renew`]: Renew a specific domain with -D or --domain parameter if posibile. To force renew, use -f parameter.
+* `-r, --renew`：配合 `-D` 续签指定域名，加 `-f` 强制续签
+* `-R, --renew-all`：续签全部域名，加 `-f` 强制续签
+* `-f, -F, --force`：强制续签
+* `-v, --revoke`：吊销证书
+* `-V, --remove`：移除域名证书
 
-* [`-R`, `--renew-all`]: Renew all domains if possible. To force renew, use -f parameter.  
+### 本地开发用 mkcert 证书
 
-* [`-f`, `-F`, `--force`]: Force renew for a specific domain or all domains.
+针对 `.test`、`.local`、`.dev` 等本地域名，可用 `mkcert` 生成受信任证书，避免浏览器警告。
 
-* [`-v`, `--revoke`]: Revoke a domain.  
-
-* [`-V`, `--remove`]: Remove a domain.
-
-### Using mkcert for Local Development SSL
-
-For local development domains (`.test`, `.local`, `.dev`, etc.), you can use `mkcert` to generate trusted SSL certificates without warnings.
-
-#### Installing mkcert
-
-First-time installation (Windows with Chocolatey):
+首次安装（Windows + Chocolatey）：
 
 ```bash
 bash bin/mkcert.sh --install
 ```
 
-This will:
-
-* Install `mkcert` via Chocolatey
-* Create and install a local Certificate Authority (CA) in your system trust store
-
-#### Generating Local SSL Certificate
-
-After adding a domain to your environment, generate an SSL certificate:
+先用 `domain.sh --add` 添加域名，再生成证书：
 
 ```bash
 bash bin/mkcert.sh [-D, --domain] example.test
 ```
 
-This will:
-
-1. Check if the domain exists in your configuration
-2. Generate certificates for `example.test` and `www.example.test`
-3. Create a `dockerLocal` template with SSL configuration
-4. Copy certificates to the container
-5. Move the domain from the standard template to the SSL-enabled template
-6. Restart OpenLiteSpeed
-
-Your domain will now be accessible via HTTPS with a trusted certificate at `https://example.test`
-
-#### Removing Local SSL Certificate
-
-To remove the SSL certificate and revert to HTTP:
+脚本会为 `example.test` 和 `www.example.test` 生成证书、创建带 SSL 的 `dockerLocal` 模板、把域名迁移到该模板并重启 OpenLiteSpeed。移除证书并还原为 HTTP：
 
 ```bash
 bash bin/mkcert.sh [-R, --remove] [-D, --domain] example.test
 ```
 
-This will:
-
-1. Remove the domain from the `dockerLocal` template
-2. Move it back to the standard `docker` template
-3. Delete certificate files from both host and container
-4. Clean up empty templates if no other domains use SSL
-5. Restart OpenLiteSpeed
-
-> **Important**: You must add the domain to your environment first using `bash bin/domain.sh --add example.test` before generating certificates.
-
-### Update Web Server
-
-To upgrade the web server to latest stable version, run the following:
+### 升级 Web 服务器
 
 ```bash
 bash bin/webadmin.sh [-U, --upgrade]
 ```
 
-### Apply OWASP ModSecurity
-
-Enable OWASP `mod_secure` on the web server:
+### 启用 / 关闭 OWASP ModSecurity
 
 ```bash
 bash bin/webadmin.sh [-M, --mod-secure] enable
-```
-
-Disable OWASP `mod_secure` on the web server:
-
-```bash
 bash bin/webadmin.sh [-M, --mod-secure] disable
 ```
 
->Please ignore ModSecurity warnings from the server. They happen if some of the rules are not supported by the server.
->
-### Accessing the Database
+> 部分规则服务器不支持会有警告，忽略即可。
 
-After installation, you can use phpMyAdmin to access the database by visiting `http://127.0.0.1:8080` or `https://127.0.0.1:8443`. The default username is `root`, and the password is the same as the one you supplied in the `.env` file.
+### 其他 webadmin.sh 参数
 
-## Customization
+* `-R, --restart`：平滑重启 OpenLiteSpeed
+* `-S, --serial [序列号|TRIAL]`：应用 LiteSpeed 序列号
 
-If you want to customize the image by adding some packages, e.g. `lsphp83-pspell`, just extend it with a Dockerfile.
+### phpMyAdmin
 
-1. We can create a `custom` folder and a `custom/Dockerfile` file under the main project.
-2. Add the following example code to `Dockerfile` under the custom folder
+出于安全考虑，phpMyAdmin 端口默认未暴露。需要时在 `docker-compose.yml` 中取消注释：
 
-    ```bash
-    FROM litespeedtech/openlitespeed:latest
-    RUN apt-get update && apt-get install lsphp83-pspell -y
-    ```
+```yaml
+  phpmyadmin:
+    ports:
+      - 8080:80
+```
 
-3. Add `build: ./custom` line under the "image: litespeedtech" of docker-composefile. So it will looks like this
+然后 `docker compose up -d` 重新创建，访问 `http://127.0.0.1:8080`，用户名 `root`，密码为 `.env` 中的 `MYSQL_ROOT_PASSWORD`。
 
-    ```bash
-    litespeed:
-      image: litespeedtech/openlitespeed:${OLS_VERSION}-${PHP_VERSION}
-      build: ./custom
-    ```
+## 自定义
 
-4. Build and start it with command:
+### 追加 PHP 扩展
 
-    ```bash
-    docker compose up --build
-    ```
+编辑 `custom/Dockerfile`，在 `apt-get install` 行追加包名（如 `${PHP_VERSION}-pspell`），然后：
 
-## Support & Feedback
+```bash
+docker compose up -d --build
+```
 
-If you still have a question after using OpenLiteSpeed Docker, you have a few options.
+### 修改 PHP 配置
 
-* Join [the GoLiteSpeed Slack community](https://litespeedtech.com/slack) for real-time discussion
-* Post to [the OpenLiteSpeed Forums](https://forum.openlitespeed.org/) for community support
-* Reporting any issue on [Github ols-docker-env](https://github.com/litespeedtech/ols-docker-env/issues) project
+编辑 `custom/php.ini`，它会以 `99-php.ini` 挂载到容器内的 `mods-available` 目录，优先级高于默认配置。修改后重启 Web 服务器：
 
-**_Pull requests are always welcome!_**
+```bash
+bash bin/webadmin.sh -R
+```
+
+### 修改 MySQL 配置
+
+编辑 `custom/my.cnf` 后重启数据库容器：
+
+```bash
+docker compose restart mysql
+```
+
+> 注意：`innodb_buffer_pool_size` 超过物理内存会导致容器启动失败。
+
+## 同步上游
+
+```bash
+git remote add upstream https://github.com/litespeedtech/ols-docker-env.git
+git fetch upstream
+git merge upstream/master
+```
+
+合并时冲突通常集中在 `docker-compose.yml`（镜像名）、`bin/database.sh`（`mariadb` → `mysql` 客户端及 `db_setup`）和 `.env`（时区 / 版本号）。解决时保留本分支的 MySQL 相关改动，接受上游的版本升级，并同步更新 `PHP_TAG`。
+
+## 支持
+
+* 上游项目问题：[litespeedtech/ols-docker-env Issues](https://github.com/litespeedtech/ols-docker-env/issues)
+* [OpenLiteSpeed 论坛](https://forum.openlitespeed.org/)
+* [GoLiteSpeed Slack](https://litespeedtech.com/slack)
