@@ -7,7 +7,7 @@ DOMAIN=''
 WWW_UID=''
 WWW_GID=''
 WPCONSTCONF=''
-PUB_IP=$(curl -s http://checkip.amazonaws.com)
+PUB_IP=$(curl -s https://checkip.amazonaws.com)
 DB_HOST='mysql'
 PLUGINLIST="litespeed-cache.zip"
 THEME='twentytwenty'
@@ -31,6 +31,30 @@ help_message(){
 check_input(){
     if [ -z "${1}" ]; then
         help_message
+        exit 1
+    fi
+}
+
+validate_domain(){
+    if ! echo "${1}" | grep -Eq '^(localhost|([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$'; then
+        echo "[X] Invalid domain name: '${1}'. Abort!"
+        exit 1
+    fi
+}
+
+validate_app_name(){
+    case "${1}" in
+        wordpress|wp) ;;
+        *)
+            echo "[X] Invalid app name: '${1}'. Abort!"
+            exit 1
+            ;;
+    esac
+}
+
+validate_vhname(){
+    if ! echo "${1}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+        echo "[X] Invalid vhname: '${1}'. Abort!"
         exit 1
     fi
 }
@@ -95,7 +119,7 @@ set_vh_docroot(){
 check_sql_native(){
 	local COUNTER=0
 	local LIMIT_NUM=100
-	until [ "$(curl -v mysql:3306 2>&1 | grep -i 'native\|Connected')" ]; do
+	until [ "$(curl -v mysql:3306 2>&1 | grep -i 'native\|Connected\|Established')" ]; do
 		echo "Counter: ${COUNTER}/${LIMIT_NUM}"
 		COUNTER=$((COUNTER+1))
 		if [ ${COUNTER} = 10 ]; then
@@ -113,7 +137,7 @@ install_wp_plugin(){
         wget -q -P ${VH_DOC_ROOT}/wp-content/plugins/ https://downloads.wordpress.org/plugin/${PLUGIN}
         if [ ${?} = 0 ]; then
 		    ck_unzip
-            unzip -qq -o ${VH_DOC_ROOT}/wp-content/plugins/${PLUGIN} -d ${VH_DOC_ROOT}/wp-content/plugins/
+            /usr/bin/unzip -qq -o ${VH_DOC_ROOT}/wp-content/plugins/${PLUGIN} -d ${VH_DOC_ROOT}/wp-content/plugins/
         else
             echo "${PLUGINLIST} FAILED to download"
         fi
@@ -212,9 +236,19 @@ preinstall_wordpress(){
 
 app_wordpress_dl(){
 	if [ ! -f "${VH_DOC_ROOT}/wp-config.php" ] && [ ! -f "${VH_DOC_ROOT}/wp-config-sample.php" ]; then
-		wp core download \
-			--allow-root \
-			--quiet
+	    ck_unzip
+		### WP CLI truncates file paths over 100 chars, wait new release, use download for now. 
+		#wp core download \
+	    #   --allow-root \
+        #   --quiet
+        curl -fsSL https://wordpress.org/latest.zip -o "${VH_DOC_ROOT}/wordpress.zip" &&
+        /usr/bin/unzip -q "${VH_DOC_ROOT}/wordpress.zip" -d "${VH_DOC_ROOT}" &&
+        mv "${VH_DOC_ROOT}/wordpress/"* "${VH_DOC_ROOT}/" &&
+        rmdir "${VH_DOC_ROOT}/wordpress" &&
+        rm -f "${VH_DOC_ROOT}/wordpress.zip" || {
+            echo 'Failed to download or extract WordPress'
+            return 1
+        }    			
 	else
 	    echo 'wordpress already exist, abort!'
 		exit 1
@@ -257,15 +291,18 @@ while [ ! -z "${1}" ]; do
 			;;
 		-[aA] | -app | --app) shift
 			check_input "${1}"
+			validate_app_name "${1}"
 			APP_NAME="${1}"
 			;;
 		-[dD] | -domain | --domain) shift
 			check_input "${1}"
+			validate_domain "${1}"
 			DOMAIN="${1}"
 			;;
 		-vhname | --vhname) shift
+			validate_vhname "${1}"
 			VHNAME="${1}"
-			;;	       
+			;;
 		*) 
 			help_message
 			;;              

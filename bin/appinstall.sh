@@ -26,7 +26,26 @@ check_input(){
     fi
 }
 
+validate_domain(){
+    if ! echo "${1}" | grep -Eq '^(localhost|([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$'; then
+        echo "[X] Invalid domain name: '${1}'. Abort!"
+        exit 1
+    fi
+}
+
+validate_app_name(){
+    case "${1}" in
+        wordpress|wp) ;;
+        *)
+            echo "[X] Invalid app name: '${1}'. Abort!"
+            exit 1
+            ;;
+    esac
+}
+
 app_download(){
+    validate_app_name "${1}"
+    validate_domain "${2}"
     docker compose exec litespeed su -c "appinstallctl.sh --app ${1} --domain ${2}"
     bash bin/webadmin.sh -r
     exit 0

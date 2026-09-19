@@ -46,6 +46,14 @@ domain_filter(){
     DOMAIN="${DOMAIN#https://}"
     DOMAIN="${DOMAIN#ftp://}"
     DOMAIN="${DOMAIN%%/*}"
+    validate_domain "${DOMAIN}"
+}
+
+validate_domain(){
+    if ! echo "${1}" | grep -Eq '^(localhost|([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,})$'; then
+        echo "[X] Invalid domain name: '${1}'. Abort!"
+        exit 1
+    fi
 }
 
 www_domain(){
